@@ -182,6 +182,13 @@ public class MainActivity extends Activity {
         Bitmap mBitmap;
         byte[] mYUVData;
         int[] mRGBData;
+        int[][] mNewData;
+        int[][] mLastData;
+        float[][] mEx;
+        float[][] mEy;
+        float[][] mEt;
+        float[][] mU;
+        float[][] mV;
         int mImageWidth, mImageHeight;
         int[] mRedHistogram;
         int[] mGreenHistogram;
@@ -210,6 +217,13 @@ public class MainActivity extends Activity {
             mBitmap = null;    // will be set up later in Preview - PreviewCallback
             mYUVData = null;
             mRGBData = null;
+            mNewData = null;
+            mLastData = null;
+            mEx = null;
+            mEy = null;
+            mEt = null;
+            mU = null;
+            mV = null;
             mRedHistogram = new int[256];
             mGreenHistogram = new int[256];
             mBlueHistogram = new int[256];
@@ -246,6 +260,11 @@ public class MainActivity extends Activity {
 
             // Now do some image processing here:
 
+            //Calculate brightness grdients and velocity
+            calculateBrightnessGradients();
+            //For now we know V=0
+            calculateU();
+
             // Calculate histograms
             calculateIntensityHistograms(mRGBData, mRedHistogram, mGreenHistogram, mBlueHistogram,
                     mImageWidth, mImageHeight);
@@ -279,6 +298,31 @@ public class MainActivity extends Activity {
             super.onDraw(canvas);
 
         } // end onDraw method
+
+        public void calculateBrightnessGradients() {
+            if (mLastData == null) {
+                return;
+            }
+            float epx = getResources().getDisplayMetrics().xdpi;
+            for (int i = 0; i < mLastData.length; i++) {
+                for (int j = 0; j < mLastData[i].length; j++) {
+                    mEx[i][j] = 1/epx*(1/4*(mLastData[i][j+1] + mLastData[i+1][j+1] + mNewData[i][j+1] + mNewData[i+1][j+1]) - 1/4*(mLastData[i][j] + mLastData[i+1][j] + mNewData[i][j] + mNewData[i+1][j]));
+                    mEy[i][j] = 1/epx*(1/4*(mLastData[i+1][j] + mLastData[i+1][j+1] + mNewData[i+1][j] + mNewData[i+1][j+1]) - 1/4*(mLastData[i][j] + mLastData[i][j+1] + mNewData[i][j] + mNewData[i][j+1]));
+                    mEt[i][j] = 1/epx*(1/4*(mNewData[i][j] + mNewData[i][j+1] + mNewData[i+1][j] + mNewData[i+1][j+1]) - 1/4*(mLastData[i][j] + mLastData[i][j+1] + mLastData[i+1][j] + mLastData[i+1][j+1]));
+                }
+            }
+        }
+
+        public void calculateU() {
+            if (mLastData == null) {
+                return;
+            }
+            for (int i = 0; i < mLastData.length; i++) {
+                for (int j = 0; j < mLastData[i].length; j++) {
+                    mU[i][j] = -1*mEt[i][j]/mEx[i][j];
+                }
+            }
+        }
 
         public void decodeYUV420SP (int[] rgb, byte[] yuv420sp, int width, int height) { // convert image in YUV420SP format to RGB format
             final int frameSize = width * height;
@@ -516,6 +560,8 @@ public class MainActivity extends Activity {
             mDrawOnTop.mBitmap = Bitmap.createBitmap(mDrawOnTop.mImageWidth,
                     mDrawOnTop.mImageHeight, Bitmap.Config.RGB_565);
             mDrawOnTop.mRGBData = new int[mDrawOnTop.mImageWidth * mDrawOnTop.mImageHeight];
+            mDrawOnTop.mLastData = mDrawOnTop.mNewData;
+            mDrawOnTop.mNewData = new int[mDrawOnTop.mImageWidth][mDrawOnTop.mImageHeight];
             if (DBG)
                 Log.i(TAG, "data length " + data.length); // should be width*height*3/2 for YUV format
             mDrawOnTop.mYUVData = new byte[data.length];
