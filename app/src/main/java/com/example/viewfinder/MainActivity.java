@@ -265,7 +265,7 @@ public class MainActivity extends Activity {
             // now instead of this function we want to replace
             // decodeYUV420SP(mRGBData, mYUVData, mImageWidth, mImageHeight);
             // with
-            decodeYUV420SPGrayscale(mRGBData, mYUVData, mImageWidth, mImageHeight);
+            decodeYUV420SPGrayscale(mNewData, mYUVData, mImageWidth, mImageHeight);
             // Now do some image processing here:
 
             //Calculate brightness grdients and velocity
@@ -333,7 +333,7 @@ public class MainActivity extends Activity {
                 }
             }
         }
-        
+
         // here is where we can make some alterations by somehow just extracting the "Y" portion of the YUV matrix?
         // not using this anymore
 //        public void decodeYUV420SP (int[] rgb, byte[] yuv420sp, int width, int height) { // convert image in YUV420SP format to RGB format
@@ -370,15 +370,17 @@ public class MainActivity extends Activity {
         // Let's put a function here that converts the rgb pixel matrix into a greyscale intensity matrix
         // Or let's do a function that can extract the Y values of the YUV420SP object
         // does this already do this? How do I check the output??
-        public void decodeYUV420SPGrayscale (int[] rgb, byte[] yuv420sp, int width, int height) { // extract grey RGB format image
+        public void decodeYUV420SPGrayscale (int[][] rgb, byte[] yuv420sp, int width, int height) { // extract grey RGB format image
             final int frameSize = width * height;
 
             // This is much simpler since we can ignore the u and v components
-            for (int pix = 0; pix < frameSize; pix++) {
-                int y = (0xFF & ((int) yuv420sp[pix])) - 16;
-                if (y < 0) y = 0;
-                if (y > 0xFF) y = 0xFF;
-                rgb[pix] = 0xFF000000 | (y << 16) | (y << 8) | y;
+            for (int i = 0; i < height; i++) {
+                for (int j=0; j < width; j++) {
+                    int y = (0xFF & ((int) yuv420sp[(i*width)+j])) - 16;
+                    if (y < 0) y = 0;
+                    if (y > 0xFF) y = 0xFF;
+                    rgb[i][j] = 0xFF000000 | (y << 16) | (y << 8) | y;
+                }
             }
         }
 
