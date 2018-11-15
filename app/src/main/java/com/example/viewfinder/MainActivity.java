@@ -34,7 +34,6 @@ import android.view.ViewGroup.LayoutParams;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Toast;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -129,6 +128,7 @@ public class MainActivity extends Activity {
         return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA);
     }
 
+    //Used to open camera
     protected static void openCamera (int nCam) {
         String TAG = "openCamera";
         if (mCamera == null) {
@@ -151,11 +151,13 @@ public class MainActivity extends Activity {
                 mCamera.setPreviewCallback(null);
                 mCamera.stopPreview();
             }
+            // It is important to release the camera when it is not in us because it will drain the battery?
             mCamera.release();
             mCamera = null; // so we know it has been released
         } else Log.e(TAG, "No camera to release");
     }
 
+    // what is preview size?
     private static void getPreviewSize (Camera mCamera, int nPixels) { //	pick one of the available preview size
         String TAG = "getPreviewSize";
         Camera.Parameters params = mCamera.getParameters();
@@ -176,6 +178,8 @@ public class MainActivity extends Activity {
             Log.i(TAG, "Nearest fit available preview image size: " + mCameraHeight + " x " + mCameraWidth);
     }
 
+
+
 //------- nested class DrawOnTop ---------------------------------------------------------------
 
     class DrawOnTop extends View {
@@ -193,6 +197,7 @@ public class MainActivity extends Activity {
         int[] mRedHistogram;
         int[] mGreenHistogram;
         int[] mBlueHistogram;
+        int[] mBrightnessHistogram;
         Paint mPaintBlack;
         Paint mPaintYellow;
         Paint mPaintRed;
@@ -201,8 +206,8 @@ public class MainActivity extends Activity {
         int mTextsize = 90;        // controls size of text on screen
         int mLeading;              // spacing between text lines
         RectF barRect = new RectF();    // used in drawing histogram
-        double redMean, greenMean, blueMean;    // computed results
-        double redStdDev, greenStdDev, blueStdDev;
+        double redMean, greenMean, blueMean, brightMean;    // computed results
+        double redStdDev, greenStdDev, blueStdDev, brightStdDev;
         String TAG = "DrawOnTop";       // for logcat output
 
         public DrawOnTop(Context context) { // constructor
@@ -227,6 +232,7 @@ public class MainActivity extends Activity {
             mRedHistogram = new int[256];
             mGreenHistogram = new int[256];
             mBlueHistogram = new int[256];
+            mBrightnessHistogram = new int[256];
             barRect = new RectF();    // moved here to reduce GC
             if (DBG) Log.i(TAG, "DrawOnTop textsize " + mTextsize);
             mLeading = mTextsize * 6 / 5;    // adjust line spacing
@@ -245,19 +251,21 @@ public class MainActivity extends Activity {
 
         // Called when preview is drawn on screen
         // Compute some statistics and draw text and histograms on screen
-
         @Override
         protected void onDraw (Canvas canvas) {
             String TAG = "onDraw";
-            if (mBitmap == null) {    // sanity check
+            if (mBitmap == null) {    // sanity check for the existence of a BitMap
                 Log.w(TAG, "mBitMap is null");
                 super.onDraw(canvas);
                 return;    // because not yet set up
             }
 
-            // Convert image from YUV to RGB format:
-            decodeYUV420SP(mRGBData, mYUVData, mImageWidth, mImageHeight);
-
+            // Convert image from YUV to RGB format (presumably a matrix):
+            // What is YUV format??
+            // now instead of this function we want to replace
+            // decodeYUV420SP(mRGBData, mYUVData, mImageWidth, mImageHeight);
+            // with
+            decodeYUV420SPGrayscale(mRGBData, mYUVData, mImageWidth, mImageHeight);
             // Now do some image processing here:
 
             //Calculate brightness grdients and velocity
@@ -266,11 +274,10 @@ public class MainActivity extends Activity {
             calculateU();
 
             // Calculate histograms
-            calculateIntensityHistograms(mRGBData, mRedHistogram, mGreenHistogram, mBlueHistogram,
-                    mImageWidth, mImageHeight);
+            calculateIntensityHistograms(mRGBData, mRedHistogram, mGreenHistogram, mBlueHistogram, mBrightnessHistogram, mImageWidth, mImageHeight);
 
             // calculate means and standard deviations
-            calculateMeanAndStDev(mRedHistogram, mGreenHistogram, mBlueHistogram, mImageWidth * mImageHeight);
+            calculateMeanAndStDev(mRedHistogram, mGreenHistogram, mBlueHistogram, mBrightnessHistogram, nPixels);
 
             // Finally, use the results to draw things on top of screen:
             int canvasHeight = canvas.getHeight();
@@ -279,21 +286,24 @@ public class MainActivity extends Activity {
             int marginWidth = (canvasWidth - newImageWidth) / 2;
 
             // Draw mean (truncate to integer) text on screen
-            String imageMeanStr = "Mean    (R,G,B): " + String.format("%4d", (int) redMean) + ", " +
-                    String.format("%4d", (int) greenMean) + ", " + String.format("%4d", (int) blueMean);
+            String imageMeanStr = "Mean    (brightness): " + String.format("%4d", (int) brightMean);
+                    //+ ", " +
+                    //String.format("%4d", (int) greenMean) + ", " + String.format("%4d", (int) blueMean);
             drawTextOnBlack(canvas, imageMeanStr, marginWidth + 10, mLeading, mPaintYellow);
             // Draw standard deviation (truncate to integer) text on screen
-            String imageStdDevStr = "Std Dev (R,G,B): " + String.format("%4d", (int) redStdDev) + ", " +
-                    String.format("%4d", (int) greenStdDev) + ", " + String.format("%4d", (int) blueStdDev);
+            String imageStdDevStr = "Std Dev (brightness): " + String.format("%4d", (int) brightStdDev);
+                    // + ", " +
+                    // String.format("%4d", (int) greenStdDev) + ", " + String.format("%4d", (int) blueStdDev);
             drawTextOnBlack(canvas, imageStdDevStr, marginWidth + 10, 2 * mLeading, mPaintYellow);
 
             float barWidth = ((float) newImageWidth) / 256;
             // Draw red intensity histogram
-            drawHistogram(canvas, mPaintRed, mRedHistogram, nPixels, canvasHeight - 2 * 100, marginWidth, barWidth);
+            // drawHistogram(canvas, mPaintRed, mRedHistogram, nPixels, canvasHeight - 2 * 100, marginWidth, barWidth);
             // Draw green intensity histogram
-            drawHistogram(canvas, mPaintGreen, mGreenHistogram, nPixels, canvasHeight - 100, marginWidth, barWidth);
+            // drawHistogram(canvas, mPaintGreen, mGreenHistogram, nPixels, canvasHeight - 100, marginWidth, barWidth);
             // Draw blue intensity histogram
-            drawHistogram(canvas, mPaintBlue, mBlueHistogram, nPixels, canvasHeight, marginWidth, barWidth);
+            // drawHistogram(canvas, mPaintBlue, mBlueHistogram, nPixels, canvasHeight, marginWidth, barWidth);
+            drawHistogram(canvas, mPaintBlack, mBrightnessHistogram, nPixels, canvasHeight, marginWidth, barWidth);
 
             super.onDraw(canvas);
 
@@ -323,39 +333,44 @@ public class MainActivity extends Activity {
                 }
             }
         }
+        
+        // here is where we can make some alterations by somehow just extracting the "Y" portion of the YUV matrix?
+        // not using this anymore
+//        public void decodeYUV420SP (int[] rgb, byte[] yuv420sp, int width, int height) { // convert image in YUV420SP format to RGB format
+//            final int frameSize = width * height;
+//
+//            for (int j = 0, pix = 0; j < height; j++) {
+//                int uvp = frameSize + (j >> 1) * width;    // index to start of u and v data for this row
+//                int u = 0, v = 0;
+//                for (int i = 0; i < width; i++, pix++) {
+//                    int y = (0xFF & ((int) yuv420sp[pix])) - 16;
+//                    if (y < 0) y = 0;
+//                    if ((i & 1) == 0) { // even row & column (u & v are at quarter resolution of y)
+//                        v = (0xFF & yuv420sp[uvp++]) - 128;
+//                        u = (0xFF & yuv420sp[uvp++]) - 128;
+//                    }
+//
+//                    int y1192 = 1192 * y;
+//                    int r = (y1192 + 1634 * v);
+//                    int g = (y1192 - 833 * v - 400 * u);
+//                    int b = (y1192 + 2066 * u);
+//
+//                    if (r < 0) r = 0;
+//                    else if (r > 0x3FFFF) r = 0x3FFFF;
+//                    if (g < 0) g = 0;
+//                    else if (g > 0x3FFFF) g = 0x3FFFF;
+//                    if (b < 0) b = 0;
+//                    else if (b > 0x3FFFF) b = 0x3FFFF;
+//
+//                    rgb[pix] = 0xFF000000 | ((r << 6) & 0xFF0000) | ((g >> 2) & 0xFF00) | ((b >> 10) & 0xFF);
+//                }
+//            }
+//        }
 
-        public void decodeYUV420SP (int[] rgb, byte[] yuv420sp, int width, int height) { // convert image in YUV420SP format to RGB format
-            final int frameSize = width * height;
-
-            for (int j = 0, pix = 0; j < height; j++) {
-                int uvp = frameSize + (j >> 1) * width;    // index to start of u and v data for this row
-                int u = 0, v = 0;
-                for (int i = 0; i < width; i++, pix++) {
-                    int y = (0xFF & ((int) yuv420sp[pix])) - 16;
-                    if (y < 0) y = 0;
-                    if ((i & 1) == 0) { // even row & column (u & v are at quarter resolution of y)
-                        v = (0xFF & yuv420sp[uvp++]) - 128;
-                        u = (0xFF & yuv420sp[uvp++]) - 128;
-                    }
-
-                    int y1192 = 1192 * y;
-                    int r = (y1192 + 1634 * v);
-                    int g = (y1192 - 833 * v - 400 * u);
-                    int b = (y1192 + 2066 * u);
-
-                    if (r < 0) r = 0;
-                    else if (r > 0x3FFFF) r = 0x3FFFF;
-                    if (g < 0) g = 0;
-                    else if (g > 0x3FFFF) g = 0x3FFFF;
-                    if (b < 0) b = 0;
-                    else if (b > 0x3FFFF) b = 0x3FFFF;
-
-                    rgb[pix] = 0xFF000000 | ((r << 6) & 0xFF0000) | ((g >> 2) & 0xFF00) | ((b >> 10) & 0xFF);
-                }
-            }
-        }
-
-        public void decodeYUV420SPGrayscale (int[] rgb, byte[] yuv420sp, int width, int height) { // extract grey RGB format image --- not used currently
+        // Let's put a function here that converts the rgb pixel matrix into a greyscale intensity matrix
+        // Or let's do a function that can extract the Y values of the YUV420SP object
+        // does this already do this? How do I check the output??
+        public void decodeYUV420SPGrayscale (int[] rgb, byte[] yuv420sp, int width, int height) { // extract grey RGB format image
             final int frameSize = width * height;
 
             // This is much simpler since we can ignore the u and v components
@@ -368,16 +383,21 @@ public class MainActivity extends Activity {
         }
 
         // This is where we finally actually do some "image processing"!
+        // Now we need to adjust this to
 
-        public void calculateIntensityHistograms (int[] rgb, int[] redHistogram, int[] greenHistogram, int[] blueHistogram, int width, int height) {
+        public void calculateIntensityHistograms (int[] rgb, int[] redHistogram, int[] greenHistogram, int[] blueHistogram, int[] brightHistogram, int width, int height) {
             final int dpix = 1;
-            int red, green, blue, bin, pixVal;
+            int red, green, blue, bright, bin, pixVal;
             for (bin = 0; bin < 256; bin++) { // reset the histograms
                 redHistogram[bin] = 0;
                 greenHistogram[bin] = 0;
                 blueHistogram[bin] = 0;
+                brightHistogram[bin] = 0;
             }
             for (int pix = 0; pix < width * height; pix += dpix) {
+                pixVal = rgb[pix];
+                bright = pixVal & 0xFF;
+                brightHistogram[bright]++;
                 pixVal = rgb[pix];
                 blue = pixVal & 0xFF;
                 blueHistogram[blue]++;
@@ -390,10 +410,10 @@ public class MainActivity extends Activity {
             }
         }
 
-        private void calculateMeanAndStDev (int mRedHistogram[], int mGreenHistogram[], int mBlueHistogram[], int nPixels) {
+        private void calculateMeanAndStDev (int mRedHistogram[], int mGreenHistogram[], int mBlueHistogram[], int mBrightnessHistogram[], int nPixels) {
             // Calculate first and second moments (zeroth moment equals nPixels)
-            double red1stMoment = 0, green1stMoment = 0, blue1stMoment = 0;
-            double red2ndMoment = 0, green2ndMoment = 0, blue2ndMoment = 0;
+            double red1stMoment = 0, green1stMoment = 0, blue1stMoment = 0, bright1stMoment = 0;
+            double red2ndMoment = 0, green2ndMoment = 0, blue2ndMoment = 0, bright2ndMoment = 0;
             double binsquared = 0;
             for (int bin = 0; bin < 256; bin++) {
                 binsquared += (bin << 1) - 1;    // n^2 - (n-1)^2 = 2*n - 1
@@ -403,16 +423,20 @@ public class MainActivity extends Activity {
                 red2ndMoment += mRedHistogram[bin] * binsquared;
                 green2ndMoment += mGreenHistogram[bin] * binsquared;
                 blue2ndMoment += mBlueHistogram[bin] * binsquared;
+                bright1stMoment += mBrightnessHistogram[bin] * binsquared;
+                bright2ndMoment += mBrightnessHistogram[bin] * binsquared;
 
             } // bin
 
             redMean = red1stMoment / nPixels;
             greenMean = green1stMoment / nPixels;
             blueMean = blue1stMoment / nPixels;
+            brightMean = bright1stMoment / nPixels;
 
             redStdDev = Math.sqrt(red2ndMoment / nPixels - redMean * redMean);
             greenStdDev = Math.sqrt(green2ndMoment / nPixels - greenMean * greenMean);
             blueStdDev = Math.sqrt(blue2ndMoment / nPixels - blueMean * blueMean);
+            brightStdDev = Math.sqrt(bright2ndMoment / nPixels - brightMean * brightMean);
         }
 
         private void drawTextOnBlack (Canvas canvas, String str, int rPos, int cPos, Paint mPaint) { // make text stand out from background by providing thin black border
