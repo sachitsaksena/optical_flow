@@ -193,6 +193,7 @@ public class MainActivity extends Activity {
         float[][] mEt;
         float[][] mU;
         float[][] mV;
+        float max;
         int mImageWidth, mImageHeight;
         int[] mRedHistogram;
         int[] mGreenHistogram;
@@ -285,16 +286,19 @@ public class MainActivity extends Activity {
             int newImageWidth = canvasWidth - 200;
             int marginWidth = (canvasWidth - newImageWidth) / 2;
 
+            String UStr = "U    (velocity): " + String.format("%4f", (float) max);
+            drawTextOnBlack(canvas, UStr, marginWidth + 10, mLeading, mPaintYellow);
+
             // Draw mean (truncate to integer) text on screen
             String imageMeanStr = "Mean    (brightness): " + String.format("%4d", (int) brightMean);
                     //+ ", " +
                     //String.format("%4d", (int) greenMean) + ", " + String.format("%4d", (int) blueMean);
-            drawTextOnBlack(canvas, imageMeanStr, marginWidth + 10, mLeading, mPaintYellow);
+            //drawTextOnBlack(canvas, imageMeanStr, marginWidth + 10, mLeading, mPaintYellow);
             // Draw standard deviation (truncate to integer) text on screen
             String imageStdDevStr = "Std Dev (brightness): " + String.format("%4d", (int) brightStdDev);
                     // + ", " +
                     // String.format("%4d", (int) greenStdDev) + ", " + String.format("%4d", (int) blueStdDev);
-            drawTextOnBlack(canvas, imageStdDevStr, marginWidth + 10, 2 * mLeading, mPaintYellow);
+            //drawTextOnBlack(canvas, imageStdDevStr, marginWidth + 10, 2 * mLeading, mPaintYellow);
 
             float barWidth = ((float) newImageWidth) / 256;
             // Draw red intensity histogram
@@ -327,9 +331,14 @@ public class MainActivity extends Activity {
             if (mLastData == null) {
                 return;
             }
+            max = 0;
             for (int i = 0; i < mLastData.length; i++) {
                 for (int j = 0; j < mLastData[i].length; j++) {
+                    float val = -1*mEt[i][j]/mEx[i][j];
                     mU[i][j] = -1*mEt[i][j]/mEx[i][j];
+                    if (val > max) {
+                        max = val;
+                    }
                 }
             }
         }
@@ -587,7 +596,7 @@ public class MainActivity extends Activity {
                     mDrawOnTop.mImageHeight, Bitmap.Config.RGB_565);
             mDrawOnTop.mRGBData = new int[mDrawOnTop.mImageWidth * mDrawOnTop.mImageHeight];
             mDrawOnTop.mLastData = mDrawOnTop.mNewData;
-            mDrawOnTop.mNewData = new int[mDrawOnTop.mImageWidth][mDrawOnTop.mImageHeight];
+            mDrawOnTop.mNewData = new int[mDrawOnTop.mImageHeight][mDrawOnTop.mImageWidth];
             if (DBG)
                 Log.i(TAG, "data length " + data.length); // should be width*height*3/2 for YUV format
             mDrawOnTop.mYUVData = new byte[data.length];
