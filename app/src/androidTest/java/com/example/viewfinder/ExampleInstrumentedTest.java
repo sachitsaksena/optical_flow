@@ -22,5 +22,5 @@ public class ExampleInstrumentedTest {
         Context appContext = InstrumentationRegistry.getTargetContext();
 
         assertEquals("com.example.viewfinder", appContext.getPackageName());
-    }
-}
+        }
+        }
